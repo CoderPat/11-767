@@ -84,6 +84,9 @@ class DistilBertModelWithPabee(DistilBertModel):
     def set_patience(self, patience):
         self.patience = patience
 
+    def set_runtimes(self, runtimes):
+        self.runtimes = runtimes
+
     def reset_stats(self):
         self.inference_instances_num = 0
         self.inference_layers_num = 0
@@ -105,6 +108,7 @@ class DistilBertModelWithPabee(DistilBertModel):
         output_dropout=None,
         output_layers=None,
         regression=False,
+        output_after=None,
     ):
         r"""
         Return:
@@ -160,6 +164,19 @@ class DistilBertModelWithPabee(DistilBertModel):
             inputs_embeds = self.embeddings(input_ids)  # (bs, seq_length, dim)
         encoder_outputs = inputs_embeds
 
+        if output_after is not None:
+            for i in range(self.config.num_hidden_layers):
+                encoder_outputs = self.encoder.adaptive_forward(
+                    encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
+                )
+
+                if i == output_after:
+                    pooled_output = activation(pre_classifier(encoder_outputs[:,0]))
+                    logits = output_layers[i](pooled_output)
+                    return
+            return
+
+
         if self.training:
             res = []
             for i in range(self.config.num_hidden_layers):
@@ -178,6 +195,11 @@ class DistilBertModelWithPabee(DistilBertModel):
             )
             pooled_output = activation(pre_classifier(encoder_outputs[0][:,0]))
             res = [output_layers[self.config.num_hidden_layers - 1](pooled_output)]
+        elif self.runtime_exiting:
+            pass
+            # Hard threshold for runtime, penalty schedule based on inference time
+            # Weighted "patience" based on layers
+            # Log previous confidences -> fn(highest confidence, runtime) -> exit?
         else:
             init_time = time.time()
             patient_counter = 0
@@ -250,6 +272,7 @@ class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        output_after=None,
     ):
         r"""
             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -293,6 +316,20 @@ class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
             loss, logits = outputs[:2]
 
         """
+        if output_after is not None:
+            self.distilbert(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                head_mask=head_mask,
+                inputs_embeds=inputs_embeds,
+                pre_classifier=self.pre_classifier,
+                activation=self.activation,
+                output_dropout=self.dropout,
+                output_layers=self.classifiers,
+                regression=self.num_labels == 1,
+                output_after=output_after
+            )
+            return
 
         logits = self.distilbert(
             input_ids=input_ids,

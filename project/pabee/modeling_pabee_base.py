@@ -31,8 +31,14 @@ class BaseEncoderWithPabee(nn.Module):
 
 
 class BasePabeeModel(PreTrainedModel):
-    def __init__(self, config, layer_cls, lazy=False):
-        self.encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
+    def __init__(self, config, layer_cls, lazy=False, encoder_varname=None):
+        encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
+        # hack for distilbert
+        if encoder_varname is not None:
+            setattr(self, encoder_varname, encoder)
+            self.encoder = getattr(self, encoder_varname)
+        else:
+            self.encoder = encoder
 
         self.init_weights()
         self.patience = 0

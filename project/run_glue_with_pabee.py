@@ -851,7 +851,7 @@ def main():
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
         patience_list = [int(x) for x in args.patience.split(",")]
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
+        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:
             checkpoints = list(

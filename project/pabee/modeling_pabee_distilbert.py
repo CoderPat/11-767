@@ -57,7 +57,7 @@ class DistilBertModelWithPabee(BasePabeeModel, DistilBertModel):
         # TODO: confirm this works fine
         self.pooler = BertPooler(config)
 
-        BasePabeeModel.__init__(self, config, TransformerBlock, lazy=lazy, encoder_varname="transformer")
+        BasePabeeModel.__init__(self, config, TransformerBlock, lazy=lazy, encoder_varname="transformer", simple_embedding=True)
 
 
 @add_start_docstrings(

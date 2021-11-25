@@ -31,12 +31,13 @@ class BaseEncoderWithPabee(nn.Module):
 
 
 class BasePabeeModel(PreTrainedModel):
-    def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder"):
+    def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder", simple_embedding=False):
 
         # hack for distilbert
         encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
         setattr(self, encoder_varname, encoder)
         self.encoder_varname = encoder_varname
+        self.simple_embedding = simple_embedding
 
         self.init_weights()
         self.patience = 0
@@ -119,9 +120,16 @@ class BasePabeeModel(PreTrainedModel):
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
-        embedding_output = self.embeddings(
-            input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
-        )
+        if self.simple_embedding:
+            if inputs_embeds is None:
+                embedding_output = self.embeddings(input_ids)
+            else:
+                embedding_output = inputs_embeds
+        else:
+            embedding_output = self.embeddings(
+                input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
+            )
+            
         encoder_outputs = embedding_output
 
         if self.training:

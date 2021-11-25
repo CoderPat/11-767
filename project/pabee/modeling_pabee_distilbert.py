@@ -35,7 +35,7 @@ from transformers.models.distilbert.modeling_distilbert import (
 
 from transformers.models.bert.modeling_bert import BertPooler
 
-from modeling_pabee_base import PabeeModel
+from .modeling_pabee_base import BasePabeeModel
 
 
 logger = logging.getLogger(__name__)
@@ -52,12 +52,12 @@ class DistilBertModelWithPabee(PabeeModel, DistilBertModel):
     """
     def __init__(self, config, lazy=False):
         DistilBertPreTrainedModel.__init__(self, config)
+        self.embeddings = Embeddings(config)
         # Add explicit pooler to make stuff easier
         # TODO: confirm this works fine
-        self.embeddings = Embeddings(config)  # Embeddings
         self.pooler = BertPooler(config)
 
-        PabeeModel.__init__(self, config, TransformerBlock, lazy)
+        BasePabeeModel.__init__(self, config, TransformerBlock, lazy)
 
 
 @add_start_docstrings(

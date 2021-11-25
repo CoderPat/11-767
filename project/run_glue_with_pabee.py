@@ -274,14 +274,17 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
 
     if args.model_type == "albert":
         model.albert.set_regression_threshold(args.regression_threshold)
+        model.albert.set_runtimes(args.runtime_threshold)
         model.albert.set_patience(patience)
         model.albert.reset_stats()
     elif args.model_type == "bert":
         model.bert.set_regression_threshold(args.regression_threshold)
+        model.bert.set_runtimes(args.runtime_threshold)
         model.bert.set_patience(patience)
         model.bert.reset_stats()
     elif args.model_type == "distilbert":
         model.distilbert.set_regression_threshold(args.regression_threshold)
+        model.distilbert.set_runtimes(args.runtime_threshold)
         model.distilbert.set_patience(patience)
         model.distilbert.reset_stats()
     else:
@@ -576,6 +579,12 @@ def main():
     parser.add_argument(
         "--regression_threshold",
         default=0,
+        type=float,
+        required=False,
+    )
+    parser.add_argument(
+        "--runtime_threshold",
+        default=10,
         type=float,
         required=False,
     )

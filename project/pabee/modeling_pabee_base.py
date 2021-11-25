@@ -19,7 +19,7 @@ class BaseEncoderWithPabee(nn.Module):
             setattr(config, 'num_hidden_layers', config.n_layers)
 
         if lazy:
-            self.layer = LazyModuleList(
+            self.layers = LazyModuleList(
                 [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)])
         else:
             self.layer = nn.ModuleList([layer_cls(config) for _ in range(config.num_hidden_layers)])
@@ -43,12 +43,9 @@ class BasePabeeModel(PreTrainedModel):
         self.patience = 0
         self.inference_instances_num = 0
         self.inference_layers_num = 0
+        self.runtimes = float("Inf")
 
         self.regression_threshold = 0
-
-    @property
-    def encoder_obj(self):
-        return getattr(self, self.encoder_varname)
 
     def set_regression_threshold(self, threshold):
         self.regression_threshold = threshold
@@ -135,7 +132,7 @@ class BasePabeeModel(PreTrainedModel):
         if self.training:
             res = []
             for i in range(self.config.num_hidden_layers):
-                encoder_outputs = self.encoder_obj.adaptive_forward(
+                encoder_outputs = self.encoder.adaptive_forward(
                     encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
                 )
 
@@ -143,7 +140,7 @@ class BasePabeeModel(PreTrainedModel):
                 logits = output_layers[i](output_dropout(pooled_output))
                 res.append(logits)
         elif self.patience == 0:  # Use all layers for inference
-            encoder_outputs = self.encoder_obj(
+            encoder_outputs = self.encoder(
                 embedding_output,
                 attention_mask=extended_attention_mask,
                 head_mask=head_mask,
@@ -159,7 +156,7 @@ class BasePabeeModel(PreTrainedModel):
             calculated_layer_num = 0
             for i in range(self.config.num_hidden_layers):
                 calculated_layer_num += 1
-                encoder_outputs = self.encoder_obj.adaptive_forward(
+                encoder_outputs = self.encoder.adaptive_forward(
                     encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
                 )
 

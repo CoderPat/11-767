@@ -71,7 +71,7 @@ class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
         self.num_labels = config.num_labels
 
         self.distilbert = DistilBertModelWithPabee(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(config.seq_classif_dropout)
         self.classifiers = nn.ModuleList(
             [nn.Linear(config.dim, self.config.num_labels) for _ in range(config.num_hidden_layers)]
         )

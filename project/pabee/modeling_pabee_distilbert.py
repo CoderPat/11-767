@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
     "The bare DistilBert Model transformer with PABEE outputting raw hidden-states without any specific head on top.",
     DISTILBERT_START_DOCSTRING,
 )
-class DistilBertModelWithPabee(PabeeModel, DistilBertModel):
+class DistilBertModelWithPabee(BasePabeeModel, DistilBertModel):
     """
     #TODO: Add PABEE prefix docstring
     """

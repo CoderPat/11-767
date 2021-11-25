@@ -1,4 +1,4 @@
-export GLUE_DIR=./glue_data/
+export GLUE_DIR=../PABEE/glue_data/
 export TASK_NAME=QQP
 
 CUDA_VISIBLE_DEVICES=0 python ./run_glue_with_pabee.py \

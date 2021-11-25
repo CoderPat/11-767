@@ -9,6 +9,8 @@ import time
 
 from lazy_layers.lazy_module_list import LazyModuleList
 
+import numpy as np
+
 class BaseEncoderWithPabee(nn.Module):
     def __init__(self, config, layer_cls, lazy=False):
         nn.Module.__init__(self)
@@ -50,6 +52,8 @@ class BasePabeeModel(PreTrainedModel):
         self.inference_layers_num = 0
         self.runtimes = float("Inf")
 
+        self.get_runtime()
+
         self.regression_threshold = 0
 
     @property
@@ -87,6 +91,7 @@ class BasePabeeModel(PreTrainedModel):
         output_dropout=None,
         output_layers=None,
         regression=False,
+        exit_after=None,
     ):
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
@@ -137,6 +142,17 @@ class BasePabeeModel(PreTrainedModel):
             )
             
         encoder_outputs = embedding_output
+
+        if exit_after is not None:
+            for i in range(self.config.num_hidden_layers):
+                encoder_outputs = self.encoder_obj.adaptive_forward(
+                    encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
+                )
+
+                if i == exit_after:
+                    pooled_output = self.pooler(encoder_outputs)
+
+                    return
 
         if self.training:
             res = []
@@ -199,3 +215,29 @@ class BasePabeeModel(PreTrainedModel):
 
         return res
 
+
+    def get_runtime(self):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.to(device)
+        print(self.config.max_position_embeddings)
+        input_ids = torch.randint(0, 30522, (1, self.config.max_position_embeddings))
+        input_ids = input_ids.to(device)
+
+        num_layers = self.config.num_hidden_layers
+        latencies = []
+        for l in range(num_layers):
+            latency = []
+            for i in range(50):
+                self.eval()
+
+                with torch.no_grad():
+
+                    start = time.time()
+                    self.forward(input_ids=input_ids, exit_after=l)
+                    end = time.time()
+                    latency.append(end-start)
+            latencies.append(latency)
+
+        latencies = np.array(latencies)
+        self.runtimes = latencies[:,10:].mean(axis=1).tolist()
+        runtime_std = latencies[:,10:].std(axis=1).tolist()

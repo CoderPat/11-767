@@ -19,7 +19,7 @@ class BaseEncoderWithPabee(nn.Module):
             setattr(config, 'num_hidden_layers', config.n_layers)
 
         if lazy:
-            self.layers = LazyModuleList(
+            self.layer = LazyModuleList(
                 [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)])
         else:
             self.layer = nn.ModuleList([layer_cls(config) for _ in range(config.num_hidden_layers)])
@@ -31,14 +31,12 @@ class BaseEncoderWithPabee(nn.Module):
 
 
 class BasePabeeModel(PreTrainedModel):
-    def __init__(self, config, layer_cls, lazy=False, encoder_varname=None):
-        encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
+    def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder"):
+
         # hack for distilbert
-        if encoder_varname is not None:
-            setattr(self, encoder_varname, encoder)
-            self.encoder = getattr(self, encoder_varname)
-        else:
-            self.encoder = encoder
+        encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
+        setattr(self, encoder_varname, encoder)
+        self.encoder_varname = encoder_varname
 
         self.init_weights()
         self.patience = 0
@@ -46,6 +44,10 @@ class BasePabeeModel(PreTrainedModel):
         self.inference_layers_num = 0
 
         self.regression_threshold = 0
+
+    @property
+    def encoder_obj(self):
+        return getattr(self, self.encoder_varname)
 
     def set_regression_threshold(self, threshold):
         self.regression_threshold = threshold
@@ -125,7 +127,7 @@ class BasePabeeModel(PreTrainedModel):
         if self.training:
             res = []
             for i in range(self.config.num_hidden_layers):
-                encoder_outputs = self.encoder.adaptive_forward(
+                encoder_outputs = self.encoder_obj.adaptive_forward(
                     encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
                 )
 
@@ -133,7 +135,7 @@ class BasePabeeModel(PreTrainedModel):
                 logits = output_layers[i](output_dropout(pooled_output))
                 res.append(logits)
         elif self.patience == 0:  # Use all layers for inference
-            encoder_outputs = self.encoder(
+            encoder_outputs = self.encoder_obj(
                 embedding_output,
                 attention_mask=extended_attention_mask,
                 head_mask=head_mask,
@@ -149,7 +151,7 @@ class BasePabeeModel(PreTrainedModel):
             calculated_layer_num = 0
             for i in range(self.config.num_hidden_layers):
                 calculated_layer_num += 1
-                encoder_outputs = self.encoder.adaptive_forward(
+                encoder_outputs = self.encoder_obj.adaptive_forward(
                     encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
                 )
 

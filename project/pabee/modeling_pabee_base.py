@@ -28,7 +28,12 @@ class BaseEncoderWithPabee(nn.Module):
         layer_outputs = self.layer[current_layer](hidden_states, attention_mask, head_mask[current_layer])
         hidden_states = layer_outputs[0]
         return hidden_states
-
+    
+    def forward(self, hidden_states, attention_mask, head_mask):
+        for layer_num, layer in enumerate(self.layer):
+            layer_outputs = self.layer[layer_num](hidden_states, attention_mask, head_mask[layer_num])
+            hidden_states = layer_outputs[0]
+        return layer_outputs
 
 class BasePabeeModel(PreTrainedModel):
     def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder", simple_embedding=False):
@@ -148,8 +153,8 @@ class BasePabeeModel(PreTrainedModel):
                 embedding_output,
                 attention_mask=extended_attention_mask,
                 head_mask=head_mask,
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=encoder_extended_attention_mask,
+                # encoder_hidden_states=encoder_hidden_states,
+                # encoder_attention_mask=encoder_extended_attention_mask,
             )
             pooled_output = self.pooler(encoder_outputs[0])
             res = [output_layers[self.config.num_hidden_layers - 1](pooled_output)]

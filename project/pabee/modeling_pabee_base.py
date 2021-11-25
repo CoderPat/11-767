@@ -50,7 +50,7 @@ class BasePabeeModel(PreTrainedModel):
         self.patience = 0
         self.inference_instances_num = 0
         self.inference_layers_num = 0
-        self.runtimes = float("Inf")
+        self.runtime_threshold = float("Inf")
 
         self.regression_threshold = 0
 
@@ -64,8 +64,8 @@ class BasePabeeModel(PreTrainedModel):
     def set_patience(self, patience):
         self.patience = patience
 
-    def set_runtimes(self, runtimes):
-        self.runtimes = runtimes
+    def set_runtimes(self, runtime_threshold):
+        self.runtime_threshold = runtime_threshold
 
     def reset_stats(self):
         self.inference_instances_num = 0

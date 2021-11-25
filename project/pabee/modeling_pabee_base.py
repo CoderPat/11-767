@@ -47,6 +47,10 @@ class BasePabeeModel(PreTrainedModel):
 
         self.regression_threshold = 0
 
+    @property
+    def encoder_obj(self):
+        return getattr(self, self.encoder_varname)
+
     def set_regression_threshold(self, threshold):
         self.regression_threshold = threshold
 
@@ -132,7 +136,7 @@ class BasePabeeModel(PreTrainedModel):
         if self.training:
             res = []
             for i in range(self.config.num_hidden_layers):
-                encoder_outputs = self.encoder.adaptive_forward(
+                encoder_outputs = self.encoder_obj.adaptive_forward(
                     encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
                 )
 
@@ -140,7 +144,7 @@ class BasePabeeModel(PreTrainedModel):
                 logits = output_layers[i](output_dropout(pooled_output))
                 res.append(logits)
         elif self.patience == 0:  # Use all layers for inference
-            encoder_outputs = self.encoder(
+            encoder_outputs = self.encoder_obj(
                 embedding_output,
                 attention_mask=extended_attention_mask,
                 head_mask=head_mask,
@@ -156,7 +160,7 @@ class BasePabeeModel(PreTrainedModel):
             calculated_layer_num = 0
             for i in range(self.config.num_hidden_layers):
                 calculated_layer_num += 1
-                encoder_outputs = self.encoder.adaptive_forward(
+                encoder_outputs = self.encoder_obj.adaptive_forward(
                     encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
                 )
 

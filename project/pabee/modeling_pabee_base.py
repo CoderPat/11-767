@@ -1,21 +1,28 @@
 import torch
 import torch.nn as nn
+from torch.nn.modules.normalization import LayerNorm
 
-from transformers import Transformer, TransformerBlock, PreTrainedModel
+from transformers import PreTrainedModel
 from transformers.modeling_utils import PreTrainedModel
+
+import time
 
 from lazy_layers.lazy_module_list import LazyModuleList
 
+class BaseEncoderWithPabee(nn.Module):
+    def __init__(self, config, layer_cls, lazy=False):
+        nn.Module.__init__(self)
 
-class EncoderWithPabee(Transformer):
-    def __init__(self, config, lazy):
-        super().__init__()
-        self.n_layers = config.n_layers
+        # hack for distilbert
+        # TODO: check if other classes have other names
+        if not hasattr(config, 'num_hidden_layers'):
+            setattr(config, 'num_hidden_layers', config.n_layers)
+
         if lazy:
             self.layers = LazyModuleList(
-                [(TransformerBlock, (config,), {}) for _ in range(config.n_layers)])
+                [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)])
         else:
-            self.layer = nn.ModuleList([TransformerBlock(config) for _ in range(config.n_layers)])
+            self.layer = nn.ModuleList([layer_cls(config) for _ in range(config.num_hidden_layers)])
 
     def adaptive_forward(self, hidden_states, current_layer, attention_mask=None, head_mask=None):
         layer_outputs = self.layer[current_layer](hidden_states, attention_mask, head_mask[current_layer])
@@ -23,11 +30,9 @@ class EncoderWithPabee(Transformer):
         return hidden_states
 
 
-class PabeeModel(PreTrainedModel):
-    def __init__(self, config, lazy=False):
-        super().__init__(config)
-
-        self.encoder = EncoderWithPabee(config, lazy=lazy)
+class BasePabeeModel(PreTrainedModel):
+    def __init__(self, config, layer_cls, lazy=False):
+        self.encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
 
         self.init_weights()
         self.patience = 0
@@ -68,30 +73,6 @@ class PabeeModel(PreTrainedModel):
         output_layers=None,
         regression=False,
     ):
-        r"""
-        Return:
-            :obj:`tuple(torch.FloatTensor)` comprising various elements depending on the configuration (:class:`~transformers.BertConfig`) and inputs:
-            last_hidden_state (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, hidden_size)`):
-                Sequence of hidden-states at the output of the last layer of the model.
-            pooler_output (:obj:`torch.FloatTensor`: of shape :obj:`(batch_size, hidden_size)`):
-                Last layer hidden-state of the first token of the sequence (classification token)
-                further processed by a Linear layer and a Tanh activation function. The Linear
-                layer weights are trained from the next sentence prediction (classification)
-                objective during pre-training.
-                This output is usually *not* a good summary
-                of the semantic content of the input, you're often better with averaging or pooling
-                the sequence of hidden-states for the whole input sequence.
-            hidden_states (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_hidden_states=True``):
-                Tuple of :obj:`torch.FloatTensor` (one for the output of the embeddings + one for the output of each layer)
-                of shape :obj:`(batch_size, sequence_length, hidden_size)`.
-                Hidden-states of the model at the output of each layer plus the initial embedding outputs.
-            attentions (:obj:`tuple(torch.FloatTensor)`, `optional`, returned when ``config.output_attentions=True``):
-                Tuple of :obj:`torch.FloatTensor` (one for each layer) of shape
-                :obj:`(batch_size, num_heads, sequence_length, sequence_length)`.
-                Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
-                heads.
-        """
-
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
@@ -156,6 +137,7 @@ class PabeeModel(PreTrainedModel):
             pooled_output = self.pooler(encoder_outputs[0])
             res = [output_layers[self.config.num_hidden_layers - 1](pooled_output)]
         else:
+            init_time = time.time()
             patient_counter = 0
             patient_result = None
             calculated_layer_num = 0
@@ -186,6 +168,8 @@ class PabeeModel(PreTrainedModel):
 
                 patient_result = logits
                 if patient_counter == self.patience:
+                    break
+                if self.runtime_threshold > time.time() - init_time:
                     break
             res = [patient_result]
             self.inference_layers_num += calculated_layer_num

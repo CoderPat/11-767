@@ -23,14 +23,19 @@ from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
 from transformers.file_utils import add_start_docstrings, add_start_docstrings_to_model_forward
+from transformers.modeling_utils import PreTrainedModel
 from transformers.models.bert.modeling_bert import (
     BERT_INPUTS_DOCSTRING,
     BERT_START_DOCSTRING,
+    BertEncoder,
+    BertLayer,
     BertModel,
     BertPreTrainedModel,
+    BertEmbeddings,
+    BertPooler
 )
 
-from .modeling_pabee_base import PabeeModel
+from .modeling_pabee_base import BasePabeeModel
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +43,7 @@ logger = logging.getLogger(__name__)
     "The bare Bert Model transformer with PABEE outputting raw hidden-states without any specific head on top.",
     BERT_START_DOCSTRING,
 )
-class BertModelWithPabee(PabeeModel, BertModel):
+class BertModelWithPabee(BasePabeeModel, BertModel):
     """
     #TODO: Add PABEE prefix docstring
 
@@ -55,6 +60,12 @@ class BertModelWithPabee(PabeeModel, BertModel):
         https://arxiv.org/abs/1706.03762
 
     """
+    def __init__(self, config, lazy=False):
+        PreTrainedModel.__init__(self, config)
+        self.config = config
+        self.embeddings = BertEmbeddings(config)
+        self.pooler = BertPooler(config)
+        BasePabeeModel.__init__(self, config, BertLayer, lazy)
 
 
 @add_start_docstrings(
@@ -63,11 +74,11 @@ class BertModelWithPabee(PabeeModel, BertModel):
     BERT_START_DOCSTRING,
 )
 class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, lazy=False):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModelWithPabee(config)
+        self.bert = BertModelWithPabee(config, lazy=lazy)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifiers = nn.ModuleList(
             [nn.Linear(config.hidden_size, self.config.num_labels) for _ in range(config.num_hidden_layers)]

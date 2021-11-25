@@ -31,7 +31,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 import transformers
-from pabee.modeling_pabee_albert import AlbertForSequenceClassificationWithPabee
+#from pabee.modeling_pabee_albert import AlbertForSequenceClassificationWithPabee
 from pabee.modeling_pabee_bert import BertForSequenceClassificationWithPabee
 from pabee.modeling_pabee_distilbert import DistilBertForSequenceClassificationWithPabee
 from transformers import (
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 MODEL_CLASSES = {
     "bert": (BertConfig, BertForSequenceClassificationWithPabee, BertTokenizer),
     "distilbert": (DistilBertConfig, DistilBertForSequenceClassificationWithPabee, DistilBertTokenizer),
-    "albert": (AlbertConfig, AlbertForSequenceClassificationWithPabee, AlbertTokenizer),
+    #"albert": (AlbertConfig, AlbertForSequenceClassificationWithPabee, AlbertTokenizer),
 }
 
 

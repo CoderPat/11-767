@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.modules.normalization import LayerNorm
+import os
 
 from transformers import PreTrainedModel
 from transformers.modeling_utils import PreTrainedModel
@@ -21,7 +22,7 @@ class BaseEncoderWithPabee(nn.Module):
             setattr(config, 'num_hidden_layers', config.n_layers)
 
         if lazy:
-            self.layers = LazyModuleList(
+            self.layer = LazyModuleList(
                 [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)])
         else:
             self.layer = nn.ModuleList([layer_cls(config) for _ in range(config.num_hidden_layers)])
@@ -207,7 +208,8 @@ class BasePabeeModel(PreTrainedModel):
                 patient_result = logits
                 if patient_counter == self.patience:
                     break
-                if self.runtime_threshold > time.time() - init_time:
+                # TODO: Fix this
+                if False and self.runtime_threshold > time.time() - init_time:
                     break
             res = [patient_result]
             self.inference_layers_num += calculated_layer_num
@@ -241,3 +243,20 @@ class BasePabeeModel(PreTrainedModel):
         latencies = np.array(latencies)
         self.runtimes = latencies[:,10:].mean(axis=1).tolist()
         runtime_std = latencies[:,10:].std(axis=1).tolist()
+
+    def save_splitted_layers(self, splitted_checkpoint, state_dict):
+        """"""
+        for i in range(self.config.num_hidden_layers):
+            path = os.path.join(splitted_checkpoint, "layer_" + str(i) + ".pt")
+            torch.save(self.encoder_obj.layer[i].state_dict(), path)
+
+        # TODO: this is kinda hacky
+        # ideally, it should map layers to checkpoints
+        keys_to_delete = []
+        for i in state_dict:
+            if "layer" in i:
+                keys_to_delete.append(i)
+        for i in keys_to_delete:
+            del state_dict[i]
+
+        return state_dict

@@ -18,6 +18,7 @@
 
 import logging
 import time 
+import os
 
 import torch
 from torch import nn
@@ -66,11 +67,11 @@ class DistilBertModelWithPabee(BasePabeeModel, DistilBertModel):
     DISTILBERT_START_DOCSTRING,
 )
 class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, lazy=False):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.distilbert = DistilBertModelWithPabee(config)
+        self.distilbert = DistilBertModelWithPabee(config, lazy=lazy)
         self.dropout = nn.Dropout(config.seq_classif_dropout)
         self.classifiers = nn.ModuleList(
             [nn.Linear(config.dim, self.config.num_labels) for _ in range(config.num_hidden_layers)]
@@ -164,3 +165,22 @@ class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
             outputs = (total_loss / total_weights,) + outputs
 
         return outputs
+
+    def save_splitted_checkpoint(self, splitted_checkpoint):
+        configuration = self.config
+        if not os.path.exists(splitted_checkpoint):
+            os.makedirs(splitted_checkpoint)
+
+        state_dict = self.state_dict()
+        state_dict = self.distilbert.save_splitted_layers(splitted_checkpoint, state_dict=state_dict)
+    
+        torch.save(state_dict, os.path.join(splitted_checkpoint, "model.pt"))
+        torch.save(configuration, os.path.join(splitted_checkpoint, "config.pt"))
+
+
+    def load_splitted_checkpoint(self, splitted_checkpoint):
+        self.load_state_dict(torch.load(os.path.join(splitted_checkpoint, "model.pt")), strict=False)
+        if not hasattr(self.config, "filenames"):
+            setattr(self.config, "filenames", [])
+        for i in range(self.config.num_hidden_layers):
+            self.config.filenames.append(os.path.join(splitted_checkpoint, f"layer_{i}.pt"))

@@ -59,6 +59,48 @@ where `patience` can be a list of patience settings, separated by a comma. It wi
 
 When evaluating on a regression task (STS-B), you may add `--regression_threshold 0.1` to define the regression threshold.
 
+## Lazy Loading
+
+```bash
+export GLUE_DIR=/path/to/glue_data
+export TASK_NAME=MRPC
+
+python ./run_glue_with_pabee.py \
+  --model_type bert \
+  --model_name_or_path /path/to/save/ \
+  --task_name $TASK_NAME \
+  --do_lower_case \
+  --data_dir "$GLUE_DIR/$TASK_NAME" \
+  --max_seq_length 128 \
+  --per_gpu_eval_batch_size 1 \
+  --learning_rate 2e-5 \
+  --logging_steps 50 \
+  --num_train_epochs 15 \
+  --output_dir /path/to/save/ \
+  --save-splitted-checkpoint splitted \
+  --patience 3,4,5,6,7,8
+```
+```
+python ./run_glue_with_pabee.py \
+  --model_type albert \
+  --model_name_or_path /path/to/save/ \
+  --task_name $TASK_NAME \
+  --lazy_model_loading \
+  --do_eval \
+  --do_lower_case \
+  --data_dir "$GLUE_DIR/$TASK_NAME" \
+  --max_seq_length 128 \
+  --per_gpu_eval_batch_size 1 \
+  --learning_rate 2e-5 \
+  --logging_steps 50 \
+  --num_train_epochs 15 \
+  --output_dir /path/to/save/ \
+  --eval_all_checkpoints \
+  --patience 3,4,5,6,7,8
+```
+
+
+
 ## Results
 On the GLUE dev set:
 

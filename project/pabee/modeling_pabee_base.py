@@ -7,6 +7,7 @@ from transformers import PreTrainedModel
 from transformers.modeling_utils import PreTrainedModel
 
 import time
+from memory_profiler import memory_usage
 
 from lazy_layers.lazy_module_list import LazyModuleList
 
@@ -51,9 +52,8 @@ class BasePabeeModel(PreTrainedModel):
         self.patience = 0
         self.inference_instances_num = 0
         self.inference_layers_num = 0
-        self.runtimes = float("Inf")
 
-        self.get_runtime()
+        self.get_runtime_and_memory_usage()
 
         self.regression_threshold = 0
 
@@ -218,15 +218,16 @@ class BasePabeeModel(PreTrainedModel):
         return res
 
 
-    def get_runtime(self):
+    def get_runtime_and_memory_usage(self):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.to(device)
-        print(self.config.max_position_embeddings)
         input_ids = torch.randint(0, 30522, (1, self.config.max_position_embeddings))
         input_ids = input_ids.to(device)
 
         num_layers = self.config.num_hidden_layers
         latencies = []
+        avg_memory = []
+        max_memory = []
         for l in range(num_layers):
             latency = []
             for i in range(50):
@@ -239,10 +240,17 @@ class BasePabeeModel(PreTrainedModel):
                     end = time.time()
                     latency.append(end-start)
             latencies.append(latency)
+            with torch.no_grad():
+                memory_bytes = memory_usage(
+                    (self.forward, (input_ids,), {'exit_after': l}))
+            avg_memory.append(np.mean(memory_bytes))
+            max_memory.append(np.max(memory_bytes))
 
         latencies = np.array(latencies)
         self.runtimes = latencies[:,10:].mean(axis=1).tolist()
-        runtime_std = latencies[:,10:].std(axis=1).tolist()
+        self.runtimes_std = latencies[:,10:].std(axis=1).tolist()
+        self.avg_memory = avg_memory
+        self.max_memory = max_memory
 
     def save_splitted_layers(self, splitted_checkpoint, state_dict):
         """"""

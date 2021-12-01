@@ -17,5 +17,6 @@ CUDA_VISIBLE_DEVICES=0 python ./run_glue_with_pabee.py \
   --logging_steps 2000 \
   --num_train_epochs 1 \
   --output_dir ./output/ \
+  --lazy_model_loading \
   --evaluate_during_training
 

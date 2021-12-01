@@ -809,6 +809,12 @@ def main():
             cache_dir=args.cache_dir if args.cache_dir else None
         )
 
+    print(model.distilbert.runtimes)
+    print(model.distilbert.runtimes_std)
+    print(model.distilbert.avg_memory)
+    print(model.distilbert.max_memory)
+    raise Exception('runtimes')
+        
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 

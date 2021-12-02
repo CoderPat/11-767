@@ -1,13 +1,17 @@
 import torch
 import torch.nn as nn
 from torch.nn.modules.normalization import LayerNorm
+import os
 
 from transformers import PreTrainedModel
 from transformers.modeling_utils import PreTrainedModel
 
 import time
+from memory_profiler import memory_usage
 
 from lazy_layers.lazy_module_list import LazyModuleList
+
+import numpy as np
 
 class BaseEncoderWithPabee(nn.Module):
     def __init__(self, config, layer_cls, lazy=False):
@@ -19,7 +23,7 @@ class BaseEncoderWithPabee(nn.Module):
             setattr(config, 'num_hidden_layers', config.n_layers)
 
         if lazy:
-            self.layers = LazyModuleList(
+            self.layer = LazyModuleList(
                 [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)])
         else:
             self.layer = nn.ModuleList([layer_cls(config) for _ in range(config.num_hidden_layers)])
@@ -28,14 +32,21 @@ class BaseEncoderWithPabee(nn.Module):
         layer_outputs = self.layer[current_layer](hidden_states, attention_mask, head_mask[current_layer])
         hidden_states = layer_outputs[0]
         return hidden_states
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 44a5687560b3241680fc9a392486e88c2a53486f
     def forward(self, hidden_states, attention_mask, head_mask):
         for layer_num, layer in enumerate(self.layer):
             layer_outputs = self.layer[layer_num](hidden_states, attention_mask, head_mask[layer_num])
             hidden_states = layer_outputs[0]
         return layer_outputs
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> 44a5687560b3241680fc9a392486e88c2a53486f
 
 class BasePabeeModel(PreTrainedModel):
     def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder", simple_embedding=False):
@@ -50,7 +61,12 @@ class BasePabeeModel(PreTrainedModel):
         self.patience = 0
         self.inference_instances_num = 0
         self.inference_layers_num = 0
+<<<<<<< HEAD
         self.runtime_threshold = float("Inf")
+=======
+
+        self.get_runtime_and_memory_usage()
+>>>>>>> 44a5687560b3241680fc9a392486e88c2a53486f
 
         self.regression_threshold = 0
 
@@ -89,6 +105,7 @@ class BasePabeeModel(PreTrainedModel):
         output_dropout=None,
         output_layers=None,
         regression=False,
+        exit_after=None,
     ):
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
@@ -139,6 +156,17 @@ class BasePabeeModel(PreTrainedModel):
             )
             
         encoder_outputs = embedding_output
+
+        if exit_after is not None:
+            for i in range(self.config.num_hidden_layers):
+                encoder_outputs = self.encoder_obj.adaptive_forward(
+                    encoder_outputs, current_layer=i, attention_mask=extended_attention_mask, head_mask=head_mask
+                )
+
+                if i == exit_after:
+                    pooled_output = self.pooler(encoder_outputs)
+
+                    return
 
         if self.training:
             res = []
@@ -193,7 +221,8 @@ class BasePabeeModel(PreTrainedModel):
                 patient_result = logits
                 if patient_counter == self.patience:
                     break
-                if self.runtime_threshold > time.time() - init_time:
+                # TODO: Fix this
+                if False and self.runtime_threshold > time.time() - init_time:
                     break
             res = [patient_result]
             self.inference_layers_num += calculated_layer_num
@@ -201,3 +230,54 @@ class BasePabeeModel(PreTrainedModel):
 
         return res
 
+
+    def get_runtime_and_memory_usage(self):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.to(device)
+        input_ids = torch.randint(0, 30522, (1, self.config.max_position_embeddings))
+        input_ids = input_ids.to(device)
+
+        num_layers = self.config.num_hidden_layers
+        latencies = []
+        avg_memory = []
+        max_memory = []
+        for l in range(num_layers):
+            latency = []
+            for i in range(50):
+                self.eval()
+
+                with torch.no_grad():
+
+                    start = time.time()
+                    self.forward(input_ids=input_ids, exit_after=l)
+                    end = time.time()
+                    latency.append(end-start)
+            latencies.append(latency)
+            with torch.no_grad():
+                memory_bytes = memory_usage(
+                    (self.forward, (input_ids,), {'exit_after': l}))
+            avg_memory.append(np.mean(memory_bytes))
+            max_memory.append(np.max(memory_bytes))
+
+        latencies = np.array(latencies)
+        self.runtimes = latencies[:,10:].mean(axis=1).tolist()
+        self.runtimes_std = latencies[:,10:].std(axis=1).tolist()
+        self.avg_memory = avg_memory
+        self.max_memory = max_memory
+
+    def save_splitted_layers(self, splitted_checkpoint, state_dict):
+        """"""
+        for i in range(self.config.num_hidden_layers):
+            path = os.path.join(splitted_checkpoint, "layer_" + str(i) + ".pt")
+            torch.save(self.encoder_obj.layer[i].state_dict(), path)
+
+        # TODO: this is kinda hacky
+        # ideally, it should map layers to checkpoints
+        keys_to_delete = []
+        for i in state_dict:
+            if "layer" in i:
+                keys_to_delete.append(i)
+        for i in keys_to_delete:
+            del state_dict[i]
+
+        return state_dict

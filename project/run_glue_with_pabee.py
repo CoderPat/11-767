@@ -719,6 +719,9 @@ def main():
 
     parser.add_argument("--inference_time_by_layer", action="store_true", help="run benchmark during evaluation")
 
+    parser.add_argument("--save_splitted_checkpoint", default=None, help="save splitted checkpoint")
+    parser.add_argument("--lazy_model_loading", action="store_true", help="lazy model loading")
+
     args = parser.parse_args()
 
     if (
@@ -804,13 +807,23 @@ def main():
         do_lower_case=args.do_lower_case,
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
-    model = model_class.from_pretrained(
-        args.model_name_or_path,
-        from_tf=bool(".ckpt" in args.model_name_or_path),
-        config=config,
-        cache_dir=args.cache_dir if args.cache_dir else None,
-    )
+    if args.lazy_model_loading:
+        model = model_class(config=config, lazy=True)
+        model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
+    else:
+        model = model_class.from_pretrained(
+            args.model_name_or_path,
+            from_tf=bool(".ckpt" in args.model_name_or_path),
+            config=config,
+            cache_dir=args.cache_dir if args.cache_dir else None
+        )
 
+    print(model.distilbert.runtimes)
+    print(model.distilbert.runtimes_std)
+    print(model.distilbert.avg_memory)
+    print(model.distilbert.max_memory)
+    raise Exception('runtimes')
+        
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
@@ -860,7 +873,7 @@ def main():
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
         patience_list = [int(x) for x in args.patience.split(",")]
-        tokenizer = tokenizer_class.from_pretrained(args.output_dir, do_lower_case=args.do_lower_case)
+        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
         checkpoints = [args.output_dir]
         if args.eval_all_checkpoints:
             checkpoints = list(
@@ -870,11 +883,15 @@ def main():
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
 
         for checkpoint in checkpoints:
-
             global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
             prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
 
-            model = model_class.from_pretrained(checkpoint)
+            if args.lazy_model_loading:
+                model = model_class(config=config, lazy=True)
+                model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
+            else:
+                model = model_class.from_pretrained(checkpoint)
+
             model.to(args.device)
 
             print(f"Evaluation for checkpoint {prefix}")
@@ -882,7 +899,12 @@ def main():
                 result = evaluate(args, model, tokenizer, prefix=prefix, patience=patience)
                 result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
                 results.update(result)
+
+    if args.save_splitted_checkpoint is not None:
+        model.save_splitted_checkpoint(args.save_splitted_checkpoint)
+
     return results
+
 
 
 if __name__ == "__main__":

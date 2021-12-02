@@ -21,6 +21,8 @@ class LazyModuleList(nn.Module):
         #if preload_modules:
         #    assert delete_schedule == "oldest", "preloading only works with a FIFO schedule"
 
+        self.dummy_parameter = nn.Parameter(torch.Tensor([1]))
+
         self.preload_modules = delete_schedule == "oldest"
 
         self.max_instantied = max_instantied
@@ -65,7 +67,7 @@ class LazyModuleList(nn.Module):
             
 
         module_cls, module_args, module_kwargs = self.modules_defs[idx]
-        self.instantied_modules[idx] = module_cls(*module_args, **module_kwargs)
+        self.instantied_modules[idx] = module_cls(*module_args, **module_kwargs).to(self.dummy_parameter.device)
         if self.modules_checkpoints is not None:
             self.instantied_modules[idx].load_state_dict(
                 torch.load(self.modules_checkpoints[idx])

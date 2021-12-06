@@ -275,24 +275,24 @@ def train(args, train_dataset, model, tokenizer):
 
 
 def evaluate(args, model, tokenizer, prefix="", patience=0):
-
-    if args.model_type == "albert":
-        model.albert.set_regression_threshold(args.regression_threshold)
-        model.albert.set_runtimes(args.runtime_threshold)
-        model.albert.set_patience(patience)
-        model.albert.reset_stats()
-    elif args.model_type == "bert":
-        model.bert.set_regression_threshold(args.regression_threshold)
-        model.bert.set_runtimes(args.runtime_threshold)
-        model.bert.set_patience(patience)
-        model.bert.reset_stats()
-    elif args.model_type == "distilbert":
-        model.distilbert.set_regression_threshold(args.regression_threshold)
-        model.distilbert.set_runtimes(args.runtime_threshold)
-        model.distilbert.set_patience(patience)
-        model.distilbert.reset_stats()
-    else:
-        raise NotImplementedError()
+    if "pabee" in args.model_type:
+        if args.model_type.startswith("albert"):
+            model.albert.set_regression_threshold(args.regression_threshold)
+            model.albert.set_runtimes(args.runtime_threshold)
+            model.albert.set_patience(patience)
+            model.albert.reset_stats()
+        elif args.model_type.startswith("bert"):
+            model.bert.set_regression_threshold(args.regression_threshold)
+            model.bert.set_runtimes(args.runtime_threshold)
+            model.bert.set_patience(patience)
+            model.bert.reset_stats()
+        elif args.model_type.startswith("distilbert"):
+            model.distilbert.set_regression_threshold(args.regression_threshold)
+            model.distilbert.set_runtimes(args.runtime_threshold)
+            model.distilbert.set_patience(patience)
+            model.distilbert.reset_stats()
+        else:
+            raise NotImplementedError()
 
     # Loop to handle MNLI double evaluation (matched, mis-matched)
     eval_task_names = ("mnli", "mnli-mm") if args.task_name == "mnli" else (args.task_name,)
@@ -333,7 +333,6 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
                     "labels": batch[2],
                     # "labels": batch[3],
                 }
-                import ipdb; ipdb.set_trace()
                 # inputs["token_type_ids"] = batch[2]
                 outputs = model(**inputs)
                 tmp_eval_loss, logits = outputs[:2]
@@ -829,15 +828,6 @@ def main():
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
     model.to(args.device)
-
-    print("Total Model Parameters:", sum(param.numel() for param in model.parameters()))
-    output_layers_param_num = sum(param.numel() for param in model.classifiers.parameters())
-    print("Output Layers Parameters:", output_layers_param_num)
-    single_output_layer_param_num = sum(param.numel() for param in model.classifiers[0].parameters())
-    print(
-        "Added Output Layers Parameters:",
-        output_layers_param_num - single_output_layer_param_num,
-    )
 
     logger.info("Training/evaluation parameters %s", args)
 

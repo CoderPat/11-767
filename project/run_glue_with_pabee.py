@@ -40,8 +40,10 @@ from transformers import (
     AlbertConfig,
     AlbertTokenizer,
     BertConfig,
+    BertForSequenceClassification,
     BertTokenizer,
     DistilBertConfig,
+    DistilBertForSequenceClassification,
     DistilBertTokenizer,
     get_linear_schedule_with_warmup,
 )
@@ -64,8 +66,10 @@ from timeit import default_timer as timer
 logger = logging.getLogger(__name__)
 
 MODEL_CLASSES = {
-    "bert": (BertConfig, BertForSequenceClassificationWithPabee, BertTokenizer),
-    "distilbert": (DistilBertConfig, DistilBertForSequenceClassificationWithPabee, DistilBertTokenizer),
+    "bert": (BertConfig, BertForSequenceClassification, BertTokenizer),
+    "distilbert": (DistilBertConfig, DistilBertForSequenceClassification, DistilBertTokenizer),
+    "bert-pabee": (BertConfig, BertForSequenceClassificationWithPabee, BertTokenizer),
+    "distilbert-pabee": (DistilBertConfig, DistilBertForSequenceClassificationWithPabee, DistilBertTokenizer),
     #"albert": (AlbertConfig, AlbertForSequenceClassificationWithPabee, AlbertTokenizer),
 }
 
@@ -326,6 +330,7 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
                     "labels": batch[2],
                     # "labels": batch[3],
                 }
+                import ipdb; ipdb.set_trace()
                 # inputs["token_type_ids"] = batch[2]
                 outputs = model(**inputs)
                 tmp_eval_loss, logits = outputs[:2]
@@ -813,7 +818,7 @@ def main():
     print(model.distilbert.runtimes_std)
     print(model.distilbert.avg_memory)
     print(model.distilbert.max_memory)
-    raise Exception('runtimes')
+    # raise Exception('runtimes')
         
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab

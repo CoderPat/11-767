@@ -226,7 +226,7 @@ def train(args, train_dataset, model, tokenizer):
                     if (
                         args.local_rank == -1 and args.evaluate_during_training
                     ):  # Only evaluate when single GPU otherwise metrics may not average well
-                        results = evaluate(args, model, tokenizer)
+                        results = evaluate(args, model, tokenizer, patience=args.patience)
                         for key, value in results.items():
                             eval_key = "eval_{}".format(key)
                             logs[eval_key] = value
@@ -309,7 +309,7 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
         # multi-gpu eval
         if args.n_gpu > 1 and not isinstance(model, nn.DataParallel):
             model = nn.DataParallel(model)
-        
+
         # Eval!
         logger.info("***** Running evaluation {} *****".format(prefix))
         logger.info("  Num examples = %d", len(eval_dataset))
@@ -434,7 +434,7 @@ def inference_time(args, model, tokenizer, prefix=""):
         # multi-gpu eval
         if args.n_gpu > 1 and not isinstance(model, nn.DataParallel):
             model = nn.DataParallel(model)
-        
+
         # Eval!
         logger.info("***** Running evaluation on inference time {} *****".format(prefix))
         logger.info("  Batch size = %d", args.eval_batch_size)
@@ -572,7 +572,7 @@ def main():
     )
     parser.add_argument(
         "--patience",
-        default="0",
+        default="2,3,6",
         type=str,
         required=False,
     )
@@ -714,7 +714,7 @@ def main():
     )
     parser.add_argument("--server_ip", type=str, default="", help="For distant debugging.")
     parser.add_argument("--server_port", type=str, default="", help="For distant debugging.")
-    
+
     parser.add_argument("--benchmark", action="store_true", help="run benchmark during evaluation")
 
     parser.add_argument("--inference_time_by_layer", action="store_true", help="run benchmark during evaluation")
@@ -817,13 +817,8 @@ def main():
             config=config,
             cache_dir=args.cache_dir if args.cache_dir else None
         )
+        model.save_pretrained("output_test")
 
-    print(model.distilbert.runtimes)
-    print(model.distilbert.runtimes_std)
-    print(model.distilbert.avg_memory)
-    print(model.distilbert.max_memory)
-    raise Exception('runtimes')
-        
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
@@ -882,23 +877,19 @@ def main():
 
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
 
-        for checkpoint in checkpoints:
-            global_step = checkpoint.split("-")[-1] if len(checkpoints) > 1 else ""
-            prefix = checkpoint.split("/")[-1] if checkpoint.find("checkpoint") != -1 else ""
+        if args.lazy_model_loading:
+            model = model_class(config=config, lazy=True)
+            model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
+        else:
+            model = model_class.from_pretrained(args.model_name_or_path)
 
-            if args.lazy_model_loading:
-                model = model_class(config=config, lazy=True)
-                model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
-            else:
-                model = model_class.from_pretrained(checkpoint)
+        model.to(args.device)
 
-            model.to(args.device)
-
-            print(f"Evaluation for checkpoint {prefix}")
-            for patience in patience_list:
-                result = evaluate(args, model, tokenizer, prefix=prefix, patience=patience)
-                result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
-                results.update(result)
+        # print(f"Evaluation for checkpoint {prefix}")
+        for patience in patience_list:
+            result = evaluate(args, model, tokenizer, patience=patience)
+            # result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
+            results.update(result)
 
     if args.save_splitted_checkpoint is not None:
         model.save_splitted_checkpoint(args.save_splitted_checkpoint)

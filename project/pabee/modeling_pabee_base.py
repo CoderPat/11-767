@@ -32,21 +32,14 @@ class BaseEncoderWithPabee(nn.Module):
         layer_outputs = self.layer[current_layer](hidden_states, attention_mask, head_mask[current_layer])
         hidden_states = layer_outputs[0]
         return hidden_states
-<<<<<<< HEAD
 
-=======
-    
->>>>>>> 44a5687560b3241680fc9a392486e88c2a53486f
     def forward(self, hidden_states, attention_mask, head_mask):
-        for layer_num, layer in enumerate(self.layer):
-            layer_outputs = self.layer[layer_num](hidden_states, attention_mask, head_mask[layer_num])
-            hidden_states = layer_outputs[0]
-        return layer_outputs
-<<<<<<< HEAD
+        raise NotImplementedError
+        # for layer_num, layer in enumerate(self.layer):
+        #     layer_outputs = self.layer[layer_num](hidden_states, attention_mask, head_mask[layer_num])
+        #     hidden_states = layer_outputs[0]
+        # return layer_outputs
 
-
-=======
->>>>>>> 44a5687560b3241680fc9a392486e88c2a53486f
 
 class BasePabeeModel(PreTrainedModel):
     def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder", simple_embedding=False):
@@ -61,13 +54,8 @@ class BasePabeeModel(PreTrainedModel):
         self.patience = 0
         self.inference_instances_num = 0
         self.inference_layers_num = 0
-<<<<<<< HEAD
         self.runtime_threshold = float("Inf")
-=======
-
         self.get_runtime_and_memory_usage()
->>>>>>> 44a5687560b3241680fc9a392486e88c2a53486f
-
         self.regression_threshold = 0
 
     @property
@@ -154,7 +142,7 @@ class BasePabeeModel(PreTrainedModel):
             embedding_output = self.embeddings(
                 input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
             )
-            
+
         encoder_outputs = embedding_output
 
         if exit_after is not None:

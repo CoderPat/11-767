@@ -17,7 +17,7 @@
 
 
 import logging
-
+import os
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
@@ -173,3 +173,22 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
             outputs = (total_loss / total_weights,) + outputs
 
         return outputs
+
+    def save_splitted_checkpoint(self, splitted_checkpoint):
+        configuration = self.config
+        if not os.path.exists(splitted_checkpoint):
+            os.makedirs(splitted_checkpoint)
+
+        state_dict = self.state_dict()
+        state_dict = self.bert.save_splitted_layers(splitted_checkpoint, state_dict=state_dict)
+
+        torch.save(state_dict, os.path.join(splitted_checkpoint, "model.pt"))
+        torch.save(configuration, os.path.join(splitted_checkpoint, "config.pt"))
+
+
+    def load_splitted_checkpoint(self, splitted_checkpoint):
+        self.load_state_dict(torch.load(os.path.join(splitted_checkpoint, "model.pt")), strict=False)
+        if not hasattr(self.config, "filenames"):
+            setattr(self.config, "filenames", [])
+        for i in range(self.config.num_hidden_layers):
+            self.config.filenames.append(os.path.join(splitted_checkpoint, f"layer_{i}.pt"))

@@ -17,7 +17,7 @@
 
 
 import logging
-import time 
+import time
 import os
 
 import torch
@@ -160,7 +160,7 @@ class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
                 if total_loss is None:
                     total_loss = loss
                 else:
-                    total_loss += loss * (len(logits) - ix)
+                    total_loss += loss * (len(logits) - ix + 1)
                 total_weights += ix + 1
             outputs = (total_loss / total_weights,) + outputs
 
@@ -173,7 +173,7 @@ class DistilBertForSequenceClassificationWithPabee(DistilBertPreTrainedModel):
 
         state_dict = self.state_dict()
         state_dict = self.distilbert.save_splitted_layers(splitted_checkpoint, state_dict=state_dict)
-    
+
         torch.save(state_dict, os.path.join(splitted_checkpoint, "model.pt"))
         torch.save(configuration, os.path.join(splitted_checkpoint, "config.pt"))
 

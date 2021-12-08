@@ -96,6 +96,7 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        exit_after=None,
     ):
         r"""
             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -150,6 +151,7 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
             output_dropout=self.dropout,
             output_layers=self.classifiers,
             regression=self.num_labels == 1,
+            exit_after=exit_after,
         )
 
         outputs = (logits[-1],)

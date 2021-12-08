@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import random
+import time
 
 import numpy as np
 import torch
@@ -322,6 +323,7 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
         nb_eval_steps = 0
         preds = None
         out_label_ids = None
+        latency = []
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             model.eval()
             batch = tuple(t.to(args.device) for t in batch)
@@ -334,7 +336,10 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
                     # "labels": batch[3],
                 }
                 # inputs["token_type_ids"] = batch[2]
+                start = time.time()
                 outputs = model(**inputs)
+                end = time.time()
+                latency.append(end - start)
                 tmp_eval_loss, logits = outputs[:2]
 
                 eval_loss += tmp_eval_loss.mean().item()
@@ -351,7 +356,9 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
             preds = np.argmax(preds, axis=1)
         elif args.output_mode == "regression":
             preds = np.squeeze(preds)
+
         result = compute_metrics(eval_task, preds, out_label_ids)
+        result["real_latency"] = sum(latency[10:])/len(latency[10:])
 
         # benchmark
         if args.benchmark:
@@ -725,6 +732,7 @@ def main():
 
     parser.add_argument("--save_splitted_checkpoint", default=None, help="save splitted checkpoint")
     parser.add_argument("--lazy_model_loading", action="store_true", help="lazy model loading")
+    parser.add_argument("--lazy_max_layers", type=int, default=1, help="number of maximum layers to load")
 
     args = parser.parse_args()
 
@@ -812,7 +820,7 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
     if args.lazy_model_loading:
-        model = model_class(config=config, lazy=True)
+        model = model_class(config=config, lazy=True, lazy_max_layers=args.lazy_max_layers)
         model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
     else:
         model = model_class.from_pretrained(
@@ -873,7 +881,7 @@ def main():
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
 
         if args.lazy_model_loading:
-            model = model_class(config=config, lazy=True)
+            model = model_class(config=config, lazy=True, lazy_max_layers=args.lazy_max_layers)
             model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
         else:
             model = model_class.from_pretrained(args.model_name_or_path)
@@ -882,7 +890,6 @@ def main():
 
         # print(f"Evaluation for checkpoint {prefix}")
         for patience in patience_list:
-            import pdb; pdb.set_trace()
             result = evaluate(args, model, tokenizer, patience=patience)
             # result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
             results.update(result)

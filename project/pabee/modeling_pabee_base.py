@@ -14,7 +14,7 @@ from lazy_layers.lazy_module_list import LazyModuleList
 import numpy as np
 
 class BaseEncoderWithPabee(nn.Module):
-    def __init__(self, config, layer_cls, lazy=False):
+    def __init__(self, config, layer_cls, lazy=False, lazy_max_layers=1):
         nn.Module.__init__(self)
 
         # hack for distilbert
@@ -24,7 +24,8 @@ class BaseEncoderWithPabee(nn.Module):
 
         if lazy:
             self.layer = LazyModuleList(
-                [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)])
+                [(layer_cls, (config,), {}) for _ in range(config.num_hidden_layers)],
+                max_instantied=lazy_max_layers)
         else:
             self.layer = nn.ModuleList([layer_cls(config) for _ in range(config.num_hidden_layers)])
 
@@ -34,18 +35,19 @@ class BaseEncoderWithPabee(nn.Module):
         return hidden_states
 
     def forward(self, hidden_states, attention_mask, head_mask):
-        raise NotImplementedError
-        # for layer_num, layer in enumerate(self.layer):
-        #     layer_outputs = self.layer[layer_num](hidden_states, attention_mask, head_mask[layer_num])
-        #     hidden_states = layer_outputs[0]
-        # return layer_outputs
+        for layer_num, layer in enumerate(self.layer):
+            if layer_num >= len(self.layer):
+                print("layer num is bigger than layer list")
+            layer_outputs = self.layer[layer_num](hidden_states, attention_mask, head_mask[layer_num])
+            hidden_states = layer_outputs[0]
+        return layer_outputs
 
 
 class BasePabeeModel(PreTrainedModel):
-    def __init__(self, config, layer_cls, lazy=False, encoder_varname="encoder", simple_embedding=False):
+    def __init__(self, config, layer_cls, lazy=False, lazy_max_layers=1, encoder_varname="encoder", simple_embedding=False):
 
         # hack for distilbert
-        encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy)
+        encoder = BaseEncoderWithPabee(config, layer_cls, lazy=lazy, lazy_max_layers=lazy_max_layers)
         setattr(self, encoder_varname, encoder)
         self.encoder_varname = encoder_varname
         self.simple_embedding = simple_embedding

@@ -1,16 +1,15 @@
-
-export GLUE_DIR=/data/datasets/GLUE
+export GLUE_DIR=/home/haoming.zhang/11-767/PABEE/glue_data
 export TASKS="QNLI"
 
 export MODEL_NAME=bert
-export OUTPUT_DIR=/data/jaredfer/odml-bert-pabee-reversed
+export OUTPUT_DIR=/home/haoming.zhang/11-767/PABEE/pabee-bert
 
 for TASK in $TASKS; do
-  CUDA_VISIBLE_DEVICES=2 python3 ./run_glue_with_pabee.py \
+  CUDA_VISIBLE_DEVICES=0 python3 ./run_glue_with_pabee.py \
     --model_type $MODEL_NAME-pabee \
-    --model_name_or_path /$OUTPUT_DIR/$TASK \
+    --model_name_or_path /$OUTPUT_DIR \
     --task_name $TASK \
-    --do_eval \
+    --do_layer_eval \
     --do_lower_case \
     --data_dir "$GLUE_DIR/$TASK" \
     --max_seq_length 128 \
@@ -21,7 +20,5 @@ for TASK in $TASKS; do
     --output_dir ./output/ \
     --eval_all_checkpoints \
     --tokenizer $MODEL_NAME-base-uncased \
-    --patience 1,2,3,6 \
-    --lazy_model_loading \
-    --benchmark
+    --patience 1,2,3,6 
   done

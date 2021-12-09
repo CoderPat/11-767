@@ -160,7 +160,7 @@ class BasePabeeModel(PreTrainedModel):
 
                 if i == exit_after:
                     pooled_output = self.pooler(encoder_outputs)
-                    
+
                     # for evaluating layer peformance
                     if output_layers:
                         logits = output_layers[i](pooled_output)

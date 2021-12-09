@@ -1,14 +1,13 @@
-export GLUE_DIR=/data/datasets/GLUE
-# export TASKS="CoLA MNLI MRPC QQP RTE SST-2 STS-B WNLI"
+export GLUE_DIR=/home/haoming.zhang/11-767/PABEE/glue_data
 export TASKS="QNLI"
 
 export MODEL_NAME=bert
-export OUTPUT_DIR=/data/jaredfer/odml/odml-bert-pabee
+export OUTPUT_DIR=/home/haoming.zhang/11-767/PABEE/pabee-bert
 
 for TASK in $TASKS; do
   CUDA_VISIBLE_DEVICES=0 python3 ./run_glue_with_pabee.py \
     --model_type $MODEL_NAME-pabee \
-    --model_name_or_path $OUTPUT_DIR/$TASK \
+    --model_name_or_path /$OUTPUT_DIR \
     --task_name $TASK \
     --do_layer_eval \
     --do_lower_case \
@@ -18,9 +17,8 @@ for TASK in $TASKS; do
     --learning_rate 2e-5 \
     --logging_steps 50 \
     --num_train_epochs 15 \
-    --output_dir $OUTPUT_DIR/$TASK \
+    --output_dir ./output/ \
     --eval_all_checkpoints \
     --tokenizer $MODEL_NAME-base-uncased \
-    --patience 12
+    --patience 1,2,3,6 
   done
-

@@ -23,6 +23,7 @@ import logging
 import os
 import random
 from collections import Counter
+import time
 
 import numpy as np
 import torch
@@ -275,21 +276,21 @@ def train(args, train_dataset, model, tokenizer):
     return global_step, tr_loss / global_step
 
 
-def evaluate(args, model, tokenizer, prefix="", patience=0):
+def evaluate(args, model, tokenizer, prefix="", patience=0, exit_after=None):
     if "pabee" in args.model_type:
         if args.model_type.startswith("albert"):
             model.albert.set_regression_threshold(args.regression_threshold)
-            model.albert.set_runtimes(args.runtime_threshold)
+            model.albert.set_runtime_threshold(args.runtime_threshold)
             model.albert.set_patience(patience)
             model.albert.reset_stats()
         elif args.model_type.startswith("bert"):
             model.bert.set_regression_threshold(args.regression_threshold)
-            model.bert.set_runtimes(args.runtime_threshold)
+            model.bert.set_runtime_threshold(args.runtime_threshold)
             model.bert.set_patience(patience)
             model.bert.reset_stats()
         elif args.model_type.startswith("distilbert"):
             model.distilbert.set_regression_threshold(args.regression_threshold)
-            model.distilbert.set_runtimes(args.runtime_threshold)
+            model.distilbert.set_runtime_threshold(args.runtime_threshold)
             model.distilbert.set_patience(patience)
             model.distilbert.reset_stats()
         else:
@@ -323,6 +324,7 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
         nb_eval_steps = 0
         preds = None
         out_label_ids = None
+        latency = []
         for batch in tqdm(eval_dataloader, desc="Evaluating"):
             model.eval()
             batch = tuple(t.to(args.device) for t in batch)
@@ -332,10 +334,14 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
                     "input_ids": batch[0],
                     "attention_mask": batch[1],
                     "labels": batch[2],
+                    "exit_after": exit_after,
                     # "labels": batch[3],
                 }
                 # inputs["token_type_ids"] = batch[2]
+                start = time.time()
                 outputs = model(**inputs)
+                end = time.time()
+                latency.append(end - start)
                 tmp_eval_loss, logits = outputs[:2]
 
                 eval_loss += tmp_eval_loss.mean().item()
@@ -364,6 +370,7 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
 
 
         result = compute_metrics(eval_task, preds, out_label_ids)
+        result["real_latency"] = sum(latency[10:])/len(latency[10:])
 
 
         # benchmark
@@ -396,10 +403,13 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
             benchmark_result["trainable_params"] = benchmarker.get_param_count(True)
             result.update(benchmark_result)
 
+        if exit_after is not None:
+            result['exit_after'] = exit_after
+
         results.update(result)
 
         output_eval_file = os.path.join(eval_output_dir, prefix, "eval_results.txt")
-        with open(output_eval_file, "w") as writer:
+        with open(output_eval_file, "a") as writer:
             logger.info("***** Eval results {} *****".format(prefix))
             for key in sorted(result.keys()):
                 logger.info("  %s = %s", key, str(result[key]))
@@ -417,79 +427,6 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
             raise NotImplementedError()
 
     return results
-
-
-def inference_time(args, model, tokenizer, prefix=""):
-
-    if args.model_type == "albert":
-        model.albert.set_regression_threshold(args.regression_threshold)
-        model.albert.reset_stats()
-    elif args.model_type == "bert":
-        model.bert.set_regression_threshold(args.regression_threshold)
-        model.bert.reset_stats()
-    elif args.model_type == "distilbert":
-        model.distilbert.set_regression_threshold(args.regression_threshold)
-        model.distilbert.reset_stats()
-    else:
-        raise NotImplementedError()
-
-    # Loop to handle MNLI double evaluation (matched, mis-matched)
-    eval_task_names = ("mnli", "mnli-mm") if args.task_name == "mnli" else (args.task_name,)
-    eval_outputs_dirs = (args.output_dir, args.output_dir + "-MM") if args.task_name == "mnli" else (args.output_dir,)
-
-    for eval_task, eval_output_dir in zip(eval_task_names, eval_outputs_dirs):
-        eval_dataset = load_and_cache_examples(args, eval_task, tokenizer, evaluate=True)
-
-        if not os.path.exists(eval_output_dir) and args.local_rank in [-1, 0]:
-            os.makedirs(eval_output_dir)
-
-        args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
-        # Note that DistributedSampler samples randomly
-        eval_sampler = SequentialSampler(eval_dataset)
-        eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size)
-
-        # multi-gpu eval
-        if args.n_gpu > 1 and not isinstance(model, nn.DataParallel):
-            model = nn.DataParallel(model)
-
-        # Eval!
-        logger.info("***** Running evaluation on inference time {} *****".format(prefix))
-        logger.info("  Batch size = %d", args.eval_batch_size)
-
-        num_layers = model.config.num_hidden_layers
-        latencies = []
-        for l in range(num_layers):
-            latency = []
-            for i, batch in enumerate(eval_dataloader):
-                model.eval()
-                batch = tuple(t.to(args.device) for t in batch)
-
-                with torch.no_grad():
-                    inputs = {
-                        "input_ids": batch[0],
-                        "attention_mask": batch[1],
-                        "labels": batch[2],
-                        # "labels": batch[3],
-                    }
-                    # inputs["token_type_ids"] = batch[2]
-                    start = timer()
-                    model(**inputs, output_after=l)
-                    end = timer()
-                    latency.append(end-start)
-                if i == 49:
-                    break
-            latencies.append(latency)
-
-        latencies = np.array(latencies)
-        results = {}
-        results['avg_time'] = latencies[:,10:].mean(axis=1).tolist()
-        results['time_std'] = latencies[:,10:].std(axis=1).tolist()
-
-        output_eval_file = os.path.join(eval_output_dir, prefix, "inference_time.txt")
-        with open(output_eval_file, "w") as writer:
-            writer.write(json.dumps(results))
-
-    return
 
 
 def load_and_cache_examples(args, task, tokenizer, evaluate=False):
@@ -586,6 +523,13 @@ def main():
         type=str,
         required=True,
         help="The output directory where the model predictions and checkpoints will be written.",
+    )
+    parser.add_argument(
+        "--runtime_input_file",
+        default=None,
+        type=str,
+        required=False,
+        help="The file path for runtime input for training",
     )
     parser.add_argument(
         "--patience",
@@ -734,10 +678,11 @@ def main():
 
     parser.add_argument("--benchmark", action="store_true", help="run benchmark during evaluation")
 
-    parser.add_argument("--inference_time_by_layer", action="store_true", help="run benchmark during evaluation")
+    parser.add_argument("--do_layer_eval", action="store_true", help="eval performance of each layer")
 
     parser.add_argument("--save_splitted_checkpoint", default=None, help="save splitted checkpoint")
     parser.add_argument("--lazy_model_loading", action="store_true", help="lazy model loading")
+    parser.add_argument("--lazy_max_layers", type=int, default=1, help="number of maximum layers to load")
 
     args = parser.parse_args()
 
@@ -825,7 +770,7 @@ def main():
         cache_dir=args.cache_dir if args.cache_dir else None,
     )
     if args.lazy_model_loading:
-        model = model_class(config=config, lazy=True)
+        model = model_class(config=config, lazy=True, lazy_max_layers=args.lazy_max_layers)
         model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
     else:
         model = model_class.from_pretrained(
@@ -835,6 +780,11 @@ def main():
             cache_dir=args.cache_dir if args.cache_dir else None
         )
 
+    if args.do_train and args.runtime_input_file:
+        with open(args.runtime_input_file, 'r') as f:
+            runtimes = f.read().split(",")
+        runtimes = [float(r) for r in runtimes]
+        model.bert.set_runtimes(runtimes)
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
@@ -842,10 +792,6 @@ def main():
     model.to(args.device)
 
     logger.info("Training/evaluation parameters %s", args)
-
-    # get inference time by layer
-    if args.inference_time_by_layer:
-        return inference_time(args, model, tokenizer)
 
     # Training
     if args.do_train:
@@ -872,6 +818,32 @@ def main():
         tokenizer = tokenizer_class.from_pretrained(args.output_dir)
         model.to(args.device)
 
+    layer_results = {}
+    if args.do_layer_eval and args.local_rank in [-1, 0]:
+        tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name, do_lower_case=args.do_lower_case)
+        checkpoints = [args.output_dir]
+        if args.eval_all_checkpoints:
+            checkpoints = list(
+                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + "/**/" + WEIGHTS_NAME, recursive=True))
+            )
+
+        logger.info("Evaluate the following checkpoints: %s", checkpoints)
+
+        if args.lazy_model_loading:
+            model = model_class(config=config, lazy=True)
+            model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
+        else:
+            model = model_class.from_pretrained(args.model_name_or_path)
+
+        model.to(args.device)
+
+        # print(f"Evaluation for checkpoint {prefix}")
+        for exit_after in range(config.num_hidden_layers):
+
+            result = evaluate(args, model, tokenizer, exit_after=exit_after)
+            # result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
+            layer_results.update(result)
+
     # Evaluation
     results = {}
     if args.do_eval and args.local_rank in [-1, 0]:
@@ -885,7 +857,7 @@ def main():
 
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         if args.lazy_model_loading:
-            model = model_class(config=config, lazy=True)
+            model = model_class(config=config, lazy=True, lazy_max_layers=args.lazy_max_layers)
             model.load_splitted_checkpoint(os.path.join(args.output_dir, "splitted"))
         else:
             model = model_class.from_pretrained(args.output_dir)
@@ -901,7 +873,7 @@ def main():
     if args.save_splitted_checkpoint is not None:
         model.save_splitted_checkpoint(args.save_splitted_checkpoint)
 
-    return results
+    return results, layer_results
 
 
 

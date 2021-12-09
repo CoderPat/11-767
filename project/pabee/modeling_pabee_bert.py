@@ -61,12 +61,12 @@ class BertModelWithPabee(BasePabeeModel, BertModel):
         https://arxiv.org/abs/1706.03762
 
     """
-    def __init__(self, config, lazy=False):
+    def __init__(self, config, lazy=False, lazy_max_layers=1):
         PreTrainedModel.__init__(self, config)
         self.config = config
         self.embeddings = BertEmbeddings(config)
         self.pooler = BertPooler(config)
-        BasePabeeModel.__init__(self, config, BertLayer, lazy)
+        BasePabeeModel.__init__(self, config, BertLayer, lazy, lazy_max_layers=lazy_max_layers)
 
 
 @add_start_docstrings(
@@ -75,15 +75,18 @@ class BertModelWithPabee(BasePabeeModel, BertModel):
     BERT_START_DOCSTRING,
 )
 class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
-    def __init__(self, config, lazy=False):
+    def __init__(self, config, lazy=False, lazy_max_layers=1):
         super().__init__(config)
         self.num_labels = config.num_labels
 
-        self.bert = BertModelWithPabee(config, lazy=lazy)
+        self.bert = BertModelWithPabee(config, lazy=lazy, lazy_max_layers=lazy_max_layers)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.classifiers = nn.ModuleList(
             [nn.Linear(config.hidden_size, self.config.num_labels) for _ in range(config.num_hidden_layers)]
         )
+
+        self.loss_weights = None
+        self.lazy_max_layers = lazy_max_layers
 
         self.init_weights()
 
@@ -98,6 +101,7 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
         inputs_embeds=None,
         labels=None,
         output_num_layers=None,
+        exit_after=None,
     ):
         r"""
             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -152,7 +156,17 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
             output_dropout=self.dropout,
             output_layers=self.classifiers,
             regression=self.num_labels == 1,
+            exit_after=exit_after,
         )
+
+        if not self.loss_weights:
+            n = self.lazy_max_layers - 1
+            multiplier = self.bert.runtimes[-1] / self.bert.runtimes[n]
+            self.loss_weights = [multiplier*self.bert.runtimes[n]/self.bert.runtimes[i] for i in range(n+1)] + [self.bert.runtimes[-1] / self.bert.runtimes[i] for i in range(n+1, len(self.bert.runtimes))]
+
+            print(self.loss_weights)
+            print(list(range(1, len(self.bert.runtimes)+1))[::-1])
+
 
         outputs = (logits[-1],)
 

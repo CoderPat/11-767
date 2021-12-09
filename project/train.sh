@@ -10,7 +10,8 @@ for TASK in $TASKS; do
       --model_name_or_path bert-base-uncased \
       --task_name $TASK \
       --do_train \
-      --do_eval \
+      --lazy_max_layers 6 \
+      --runtime_input_file /home/haoming.zhang/11-767/project/bert_runtime_lazy_6.txt \
       --do_lower_case \
       --data_dir "$GLUE_DIR/$TASK" \
       --max_seq_length 128 \

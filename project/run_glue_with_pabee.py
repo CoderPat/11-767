@@ -279,17 +279,17 @@ def evaluate(args, model, tokenizer, prefix="", patience=0, exit_after=None):
     if "pabee" in args.model_type:
         if args.model_type.startswith("albert"):
             model.albert.set_regression_threshold(args.regression_threshold)
-            model.albert.set_runtimes(args.runtime_threshold)
+            model.albert.set_runtime_threshold(args.runtime_threshold)
             model.albert.set_patience(patience)
             model.albert.reset_stats()
         elif args.model_type.startswith("bert"):
             model.bert.set_regression_threshold(args.regression_threshold)
-            model.bert.set_runtimes(args.runtime_threshold)
+            model.bert.set_runtime_threshold(args.runtime_threshold)
             model.bert.set_patience(patience)
             model.bert.reset_stats()
         elif args.model_type.startswith("distilbert"):
             model.distilbert.set_regression_threshold(args.regression_threshold)
-            model.distilbert.set_runtimes(args.runtime_threshold)
+            model.distilbert.set_runtime_threshold(args.runtime_threshold)
             model.distilbert.set_patience(patience)
             model.distilbert.reset_stats()
         else:
@@ -511,6 +511,13 @@ def main():
         type=str,
         required=True,
         help="The output directory where the model predictions and checkpoints will be written.",
+    )
+    parser.add_argument(
+        "--runtime_input_file",
+        default=None,
+        type=str,
+        required=False,
+        help="The file path for runtime input for training",
     )
     parser.add_argument(
         "--patience",
@@ -761,6 +768,11 @@ def main():
             cache_dir=args.cache_dir if args.cache_dir else None
         )
 
+    if args.do_train and args.runtime_input_file:
+        with open(args.runtime_input_file, 'r') as f:
+            runtimes = f.read().split(",")
+        runtimes = [float(r) for r in runtimes]
+        model.bert.set_runtimes(runtimes)
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab

@@ -84,6 +84,9 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
             [nn.Linear(config.hidden_size, self.config.num_labels) for _ in range(config.num_hidden_layers)]
         )
 
+        self.loss_weights = None
+        self.lazy_max_layers = lazy_max_layers
+
         self.init_weights()
 
     @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING)
@@ -154,6 +157,15 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
             exit_after=exit_after,
         )
 
+        if not self.loss_weights:
+            n = self.lazy_max_layers - 1
+            multiplier = self.bert.runtimes[-1] / self.bert.runtimes[n]
+            self.loss_weights = [multiplier*self.bert.runtimes[n]/self.bert.runtimes[i] for i in range(n+1)] + [self.bert.runtimes[-1] / self.bert.runtimes[i] for i in range(n+1, len(self.bert.runtimes))]
+
+            print(self.loss_weights)
+            print(list(range(1, len(self.bert.runtimes)+1))[::-1])
+
+
         outputs = (logits[-1],)
 
         if labels is not None:
@@ -170,8 +182,8 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
                 if total_loss is None:
                     total_loss = loss
                 else:
-                    total_loss += loss * (ix + 1)
-                total_weights += ix + 1
+                    total_loss += loss * self.loss_weights[ix]
+                total_weights += self.loss_weights[ix]
             outputs = (total_loss / total_weights,) + outputs
 
         return outputs

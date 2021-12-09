@@ -14,12 +14,15 @@ class LazyModuleList(nn.Module):
         modules_defs: Optional[Iterable[Tuple[Type[nn.Module], List, Dict]]] = None,
         modules_checkpoints: Optional[Iterable[str]] = None,
         max_instantied: int = 1,
-        check_refs: bool = True,
-        delete_schedule: str = "oldest"
+        check_refs: bool = False,
+        delete_schedule: str = "newest",
 ):
         super().__init__()
         #if preload_modules:
         #    assert delete_schedule == "oldest", "preloading only works with a FIFO schedule"
+
+        # print(f"layers: {max_instantied}")
+        self.dummy_parameter = nn.Parameter(torch.Tensor([1]))
 
         self.preload_modules = delete_schedule == "oldest"
 
@@ -65,14 +68,15 @@ class LazyModuleList(nn.Module):
             
 
         module_cls, module_args, module_kwargs = self.modules_defs[idx]
-        self.instantied_modules[idx] = module_cls(*module_args, **module_kwargs)
+        self.instantied_modules[idx] = module_cls(*module_args, **module_kwargs).to(self.dummy_parameter.device)
         if self.modules_checkpoints is not None:
             self.instantied_modules[idx].load_state_dict(
                 torch.load(self.modules_checkpoints[idx])
             )
 
     def __getitem__(self, idx: int) -> nn.Module:
-        # TODO: add slices
+        if idx >= len(self):
+            raise IndexError("index out of range")
         if idx not in self.instantied_modules:
             self.load_module(idx)
             if self.preload_modules:
@@ -90,7 +94,7 @@ class LazyModuleList(nn.Module):
         raise NotImplementedError("")
 
     def __len__(self) -> int:
-        return len(self.module_defs)
+        return len(self.modules_defs)
 
 
 # TODO: add decorator that replaces ModuleList

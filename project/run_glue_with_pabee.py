@@ -361,7 +361,6 @@ def evaluate(args, model, tokenizer, prefix="", patience=0, exit_after=None):
 
         acc_per_layer = Counter()
         layer_counts = Counter(model.bert.inference_layers_used)
-        import pdb; pdb.set_trace()
         for acc, num_layers in zip(preds == out_label_ids, model.bert.inference_layers_used):
             acc_per_layer[num_layers] += acc
 

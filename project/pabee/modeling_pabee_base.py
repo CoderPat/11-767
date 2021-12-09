@@ -59,7 +59,7 @@ class BasePabeeModel(PreTrainedModel):
         self.inference_instances_num = 0
         self.inference_layers_num = 0
         self.runtime_threshold = float("Inf")
-        self.get_runtime_and_memory_usage()
+        # self.get_runtime_and_memory_usage()
         self.regression_threshold = 0
 
     @property

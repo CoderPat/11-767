@@ -159,13 +159,12 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
             exit_after=exit_after,
         )
 
-        if not self.loss_weights:
-            n = self.lazy_max_layers - 1
-            multiplier = self.bert.runtimes[-1] / self.bert.runtimes[n]
-            self.loss_weights = [multiplier*self.bert.runtimes[n]/self.bert.runtimes[i] for i in range(n+1)] + [self.bert.runtimes[-1] / self.bert.runtimes[i] for i in range(n+1, len(self.bert.runtimes))]
-
-            print(self.loss_weights)
-            print(list(range(1, len(self.bert.runtimes)+1))[::-1])
+        # if not self.loss_weights:
+        #     n = self.lazy_max_layers - 1
+        #     multiplier = self.bert.runtimes[-1] / self.bert.runtimes[n]
+        #     self.loss_weights = [multiplier*self.bert.runtimes[n]/self.bert.runtimes[i] for i in range(n+1)] + [self.bert.runtimes[-1] / self.bert.runtimes[i] for i in range(n+1, len(self.bert.runtimes))]
+            # print(self.loss_weights)
+            # print(list(range(1, len(self.bert.runtimes)+1))[::-1])
 
 
         outputs = (logits[-1],)

@@ -333,9 +333,10 @@ def evaluate(args, model, tokenizer, prefix="", patience=0, exit_after=None):
                     "input_ids": batch[0],
                     "attention_mask": batch[1],
                     "labels": batch[2],
-                    "exit_after": exit_after,
                     # "labels": batch[3],
                 }
+                if exit_after is not None:
+                    inputs["exit_after"] = exit_after
                 # inputs["token_type_ids"] = batch[2]
                 start = time.time()
                 outputs = model(**inputs)
@@ -664,6 +665,7 @@ def main():
     parser.add_argument("--save_splitted_checkpoint", default=None, help="save splitted checkpoint")
     parser.add_argument("--lazy_model_loading", action="store_true", help="lazy model loading")
     parser.add_argument("--lazy_max_layers", type=int, default=1, help="number of maximum layers to load")
+    parser.add_argument("--quantitized", action="store_true", help="quantized model")
 
     args = parser.parse_args()
 
@@ -690,7 +692,7 @@ def main():
 
     # Setup CUDA, GPU & distributed training
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda and not args.quantitized else "cpu")
         args.n_gpu = torch.cuda.device_count()
     else:  # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.cuda.set_device(args.local_rank)
@@ -760,6 +762,8 @@ def main():
             config=config,
             cache_dir=args.cache_dir if args.cache_dir else None
         )
+        if args.quantitized:
+            model = torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
 
 
     if args.local_rank == 0:
@@ -838,6 +842,8 @@ def main():
             model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
         else:
             model = model_class.from_pretrained(args.model_name_or_path)
+            if args.quantitized:
+                model = torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
 
         model.to(args.device)
 

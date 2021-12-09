@@ -70,8 +70,11 @@ class BasePabeeModel(PreTrainedModel):
     def set_patience(self, patience):
         self.patience = patience
 
-    def set_runtimes(self, runtime_threshold):
+    def set_runtime_threshold(self, runtime_threshold):
         self.runtime_threshold = runtime_threshold
+
+    def set_runtimes(self, runtimes):
+        self.runtimes = runtimes
 
     def reset_stats(self):
         self.inference_instances_num = 0

@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import random
+from collections import Counter
 
 import numpy as np
 import torch
@@ -351,7 +352,19 @@ def evaluate(args, model, tokenizer, prefix="", patience=0):
             preds = np.argmax(preds, axis=1)
         elif args.output_mode == "regression":
             preds = np.squeeze(preds)
+
+        acc_per_layer = Counter()
+        layer_counts = Counter(model.bert.inference_layers_used)
+        import pdb; pdb.set_trace()
+        for acc, num_layers in zip(preds == out_label_ids, model.bert.inference_layers_used):
+            acc_per_layer[num_layers] += acc
+
+        for num_layers in sorted(acc_per_layer.keys()):
+            logger.info(f"Layers: {num_layers}, Count: {layer_counts[num_layers]}, Acc: {acc_per_layer[num_layers] / layer_counts[num_layers]}")
+
+
         result = compute_metrics(eval_task, preds, out_label_ids)
+
 
         # benchmark
         if args.benchmark:
@@ -871,26 +884,22 @@ def main():
             )
 
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
-
         if args.lazy_model_loading:
             model = model_class(config=config, lazy=True)
-            model.load_splitted_checkpoint(os.path.join(args.model_name_or_path, "splitted"))
+            model.load_splitted_checkpoint(os.path.join(args.output_dir, "splitted"))
         else:
-            model = model_class.from_pretrained(args.model_name_or_path)
+            model = model_class.from_pretrained(args.output_dir)
 
         model.to(args.device)
 
         # print(f"Evaluation for checkpoint {prefix}")
         for patience in patience_list:
-            import pdb; pdb.set_trace()
             result = evaluate(args, model, tokenizer, patience=patience)
             # result = dict((k + "_{}".format(global_step), v) for k, v in result.items())
             results.update(result)
 
     if args.save_splitted_checkpoint is not None:
         model.save_splitted_checkpoint(args.save_splitted_checkpoint)
-    # else:
-    #     model.save_pretrained(args.output_dir)
 
     return results
 

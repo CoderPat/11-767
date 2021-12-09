@@ -7,6 +7,7 @@ from transformers import PreTrainedModel
 from transformers.modeling_utils import PreTrainedModel
 
 import time
+from collections import defaultdict, Counter
 from memory_profiler import memory_usage
 
 from lazy_layers.lazy_module_list import LazyModuleList
@@ -52,6 +53,7 @@ class BasePabeeModel(PreTrainedModel):
 
         self.init_weights()
         self.patience = 0
+        self.inference_layers_used = list()
         self.inference_instances_num = 0
         self.inference_layers_num = 0
         self.runtime_threshold = float("Inf")
@@ -215,6 +217,9 @@ class BasePabeeModel(PreTrainedModel):
             res = [patient_result]
             self.inference_layers_num += calculated_layer_num
             self.inference_instances_num += 1
+            if calculated_layer_num == self.config.num_hidden_layers and patient_counter != self.patience:
+                calculated_layer_num += 1
+            self.inference_layers_used.append(calculated_layer_num)
 
         return res
 

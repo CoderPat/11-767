@@ -18,6 +18,7 @@
 
 import logging
 import os
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
@@ -96,6 +97,7 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
         head_mask=None,
         inputs_embeds=None,
         labels=None,
+        output_num_layers=None,
     ):
         r"""
             labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size,)`, `optional`):
@@ -166,10 +168,12 @@ class BertForSequenceClassificationWithPabee(BertPreTrainedModel):
                     loss_fct = CrossEntropyLoss()
                     loss = loss_fct(logits_item.view(-1, self.num_labels), labels.view(-1))
                 if total_loss is None:
+                    loss_coeff = 1
                     total_loss = loss
                 else:
-                    total_loss += loss * (ix + 1)
-                total_weights += ix + 1
+                    loss_coeff = np.exp(len(logits) - ix + 1)
+                    total_loss += loss * loss_coeff
+                total_weights += loss_coeff
             outputs = (total_loss / total_weights,) + outputs
 
         return outputs
